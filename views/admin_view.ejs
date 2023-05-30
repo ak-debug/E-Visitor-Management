@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8">
+  <title>Admin View</title>
+  <link href="/assets/css/bootstrap.css" rel="stylesheet" type="text/css" />
+</head>
+
+<body>
+  <div class="container">
+    <h1 class="mt-4 mb-4">Admin View</h1>
+
+    <div class="card">
+      <div class="card-header">
+        <h3>Add Visitee</h3>
+      </div>
+      <div class="card-body">
+        <form action="/admin/addVisitee" method="post">
+          <div class="form-group">
+            <label for="name">Name:</label>
+            <input type="text" id="name" name="name" class="form-control" required>
+          </div>
+          <div class="form-group">
+            <label for="email">Email:</label>
+            <input type="email" id="email" name="email" class="form-control" required>
+          </div>
+          <div class="form-group">
+            <label for="loginId">Login ID:</label>
+            <input type="text" id="loginId" name="login_id" class="form-control" required>
+          </div>
+          <div class="form-group">
+            <label for="password">Password:</label>
+            <input type="password" id="password" name="password" class="form-control" required>
+          </div>
+          <button type="submit" class="btn btn-primary">Add Visitee</button>
+        </form>
+      </div>
+    </div>
+
+    <div class="card mt-4">
+      <div class="card-header">
+        <h3>Visitees</h3>
+      </div>
+      <div class="card-body">
+        <table class="table table-striped">
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Name</th>
+              <th>Email</th>
+              <th>Login ID</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            <% visitees.forEach(function(visitee) { %>
+            <tr>
+              <td><%= visitee.id %></td>
+              <td><%= visitee.name %></td>
+              <td><%= visitee.email %></td>
+              <td><%= visitee.login_id %></td>
+              <td>
+                <form action="/admin/deleteVisitee" method="post" style="display:inline">
+                  <input type="hidden" name="visiteeId" value="<%= visitee.id %>">
+                  <button type="submit" class="btn btn-sm btn-danger">Delete</button>
+                </form>
+              </td>
+            </tr>
+            <% }); %>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <script src="/assets/js/jquery-3.3.1.js"></script>
+  <script src="/assets/js/bootstrap.js"></script>
+</body>
+
+</html>

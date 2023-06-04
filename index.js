@@ -6,7 +6,8 @@ const bodyParser = require("body-parser");
 const mysql = require("mysql2");
 const session = require("express-session");
 const flash = require("express-flash");
-
+const QRCode = require('qrcode');
+const { v4: uuidv4 } = require('uuid');
 
 const app = express();
 const PORT = process.env.PORT || 8000;
@@ -32,6 +33,8 @@ const accountSid = config.twilio.accountSid;
 const authToken = config.twilio.authToken;
 const client = require("twilio")(accountSid, authToken);
 
+
+
 // Nodemailer configuration
 const transporter = nodemailer.createTransport({
   host: config.email_setting.host,
@@ -43,6 +46,8 @@ const transporter = nodemailer.createTransport({
     pass: config.email_setting.password,
   },
 });
+
+
 
 // Connecting to Mysql Database
 conn.connect((err) => {
@@ -62,14 +67,7 @@ app.use(
   })
 );
 
-// Middleware to check if the user is logged in
-const isAuthenticated = (req, res, next) => {
-  if (req.session && req.session.visiteeId) {
-    return next();
-  } else {
-    res.redirect("/visitee/login");
-  }
-};
+
 
 // Homepage
 app.get("/", (req, res) => {
@@ -95,6 +93,7 @@ app.post("/save", (req, res) => {
     checkin: req.body.checkin,
     mobile_no: req.body.mobile_no,
     visitee_id: req.body.visitee_id, // visitee_id column for the person visitor wants to visit
+    token: uuidv4()
   };
 
   let sql = "INSERT INTO visitors SET ?";
@@ -134,20 +133,15 @@ app.post("/save", (req, res) => {
           if (error) {
             console.log(error);
           } else {
-            let MobileBody = "New visitor information: ";
+            let mobile="+91"+ data.mobile_no; //visitor's phone number for twilio message 
+            let epassUrl = "www.name.com/epass/" + results.insertId+ "/" + data.token;
+            let MobileBody = "Your Meeting Will Be Schedules Soon!\n Here is Your E-Pass ";
             MobileBody +=
               "Name: " +
               data.name +
-              " " +
-              "Email: " +
-              data.email_id +
-              " " +
-              "Mobile Number: " +
-              data.mobile_no +
-              " " +
-              "Check In Date Time: " +
-              data.checkin;
-            let mobile="+91"+ data.mobile_no; //visitor's phone number for twilio message 
+              "\nEPASS : " +
+              epassUrl; 
+
             client.messages.create(
               {
                 body: MobileBody,
@@ -241,7 +235,7 @@ app.post("/updateVisitee", (req, res) => {
   });
 });
 
-
+//-------------------------ADMIN SECTION ----------------------------
 
 // Admin View
 app.get("/admin", (req, res) => {
@@ -281,6 +275,16 @@ app.post("/admin/deleteVisitee", (req, res) => {
     res.redirect("/admin");
   });
 });
+
+//VISITEE SECTION _______________________________________________________________________
+// Middleware to check if the visitiee is logged in
+const isAuthenticated = (req, res, next) => {
+  if (req.session && req.session.visiteeId) {
+    return next();
+  } else {
+    res.redirect("/visitee/login");
+  }
+};
 
 
 // Visitee View - Login Page
@@ -329,6 +333,43 @@ app.post("/visitee/scheduleMeeting", isAuthenticated, (req, res) => {
     res.redirect("/visitee/dashboard");
   });
 });
+
+
+
+
+//---------------E-PASS------------------------------
+// E-Pass route
+app.get("/epass/:visitorId/:token", function(req, res){
+  let visitorId = req.params.visitorId;
+  let token = req.params.token;
+
+  let sql = "SELECT * FROM visitors WHERE id = ?";
+  let query = conn.query(sql, [visitorId], (err, visitor) => {
+    if (err) throw err;
+
+    if (visitor.length > 0  && visitor[0].token === token) {
+      let sqlVisitee = "SELECT name FROM visitees WHERE id = ?";
+      let queryVisitee = conn.query(sqlVisitee, [visitor[0].visitee_id], (err, visitee) => {
+        if (err) throw err;
+
+        // Generate QR code for checkout
+        QRCode.toDataURL(visitorId.toString(), function (err, url) {
+          if (err) throw err;
+
+          res.render("epass", { 
+            visitor: visitor[0], 
+            visitee: visitee[0].name, 
+            qrCodeUrl: url 
+          });
+        });
+      });
+    } else {
+      res.send("Invalid E-Pass");
+    }
+  });
+});
+
+
 
 // Logout
 app.get("/logout", (req, res) => {

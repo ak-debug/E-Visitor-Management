@@ -8,6 +8,8 @@ const session = require("express-session");
 const flash = require("express-flash");
 const QRCode = require('qrcode');
 const { v4: uuidv4 } = require('uuid');
+const bcrypt = require('bcrypt');
+const saltRounds = 10;
 
 const app = express();
 const PORT = process.env.PORT || 8000;
@@ -235,19 +237,86 @@ app.post("/updateVisitee", (req, res) => {
   });
 });
 
-//-------------------------ADMIN SECTION ----------------------------
 
-// Admin View
-app.get("/admin", (req, res) => {
-  let sql = "SELECT * FROM visitees";
-  let query = conn.query(sql, (err, visitees) => {
+//________________________________________LOGIN SECTION & AUTHENTICATION_____________________________________
+
+// Visitee View  & ADMIN VIEW - Login Page
+app.get("/login", (req, res) => {
+  res.render("login");
+});
+
+
+// Visitee View  & ADMIN VIEW - Authenticate weather user is admin or visitee 
+
+app.post("/authenticate/:userType", (req, res) => {
+  let loginId = req.body.login_id;
+  let password = req.body.password;
+  let userType = req.params.userType;
+
+  let sql = "";
+
+  if (userType === "visitee") {
+    sql = "SELECT * FROM visitees WHERE login_id = ?";
+  } else if (userType === "admin") {
+    sql = "SELECT * FROM admins WHERE login_id = ?";
+  }
+
+  let query = conn.query(sql, [loginId], (err, result) => {
     if (err) throw err;
-    res.render("admin_view", { visitees: visitees });
+    if (result.length > 0) {
+      let user = result[0];
+      bcrypt.compare(password, user.password, (err, passwordMatch) => {
+        if (err) throw err;
+        if (passwordMatch) {
+          if (userType === "visitee") {
+            req.session.visiteeId = user.id; // Store visiteeId in session
+            res.redirect("/visitee/dashboard");
+          } else if (userType === "admin") {
+            req.session.adminId = user.id; // Store adminId in session
+            res.redirect("/admin");
+          }
+        } else {
+          res.redirect("/login");
+        }
+      });
+    } else {
+      res.redirect("/login");
+    }
   });
 });
 
+
+
+//-------------------------ADMIN SECTION ----------------------------
+// Middleware to check if the admin is logged in
+const isAuthenticatedAdmin = (req, res, next) => {
+  if (req.session && req.session.adminId) {
+    return next();
+  } else {
+    res.redirect("/login");
+  }
+};
+
+// Admin View
+// Admin View
+app.get("/admin",  isAuthenticatedAdmin,(req, res) => {
+  let sqlVisitees = "SELECT * FROM visitees";
+  let sqlAdmins = "SELECT * FROM admins";
+  
+  conn.query(sqlVisitees, (err, visitees) => {
+    if (err) throw err;
+    
+    conn.query(sqlAdmins, (err, admins) => {
+      if (err) throw err;
+      
+      res.render("admin_view", { visitees: visitees, admins: admins });
+    });
+  });
+});
+
+
 // Add Visitee
-app.post("/admin/addVisitee", (req, res) => {
+app.post("/admin/addVisitee",isAuthenticatedAdmin, (req, res) => {
   let visitee = {
     name: req.body.name,
     email: req.body.email,
@@ -255,17 +324,22 @@ app.post("/admin/addVisitee", (req, res) => {
     password: req.body.password,
   };
 
-  let sql = "INSERT INTO visitees SET ?";
-  let query = conn.query(sql, visitee, (err, result) => {
+  // Generate a salt and hash the password
+  bcrypt.hash(visitee.password, saltRounds, (err, hash) => {
     if (err) throw err;
-    req.flash("success_msg", "Visitee added successfully");
-    res.redirect("/admin");
+    visitee.password = hash;
+
+    let sql = "INSERT INTO visitees SET ?";
+    let query = conn.query(sql, visitee, (err, result) => {
+      if (err) throw err;
+      req.flash("success_msg", "Visitee added successfully");
+      res.redirect("/admin");
+    });
   });
 });
 
-
 // Delete Visitee
-app.post("/admin/deleteVisitee", (req, res) => {
+app.post("/admin/deleteVisitee",isAuthenticatedAdmin, (req, res) => {
   let visiteeId = req.body.visiteeId;
 
   let sql = "DELETE FROM visitees WHERE id = ?";
@@ -276,40 +350,52 @@ app.post("/admin/deleteVisitee", (req, res) => {
   });
 });
 
-//VISITEE SECTION _______________________________________________________________________
+
+app.post("/admin/addAdmin", isAuthenticatedAdmin,(req, res) => {
+  let admin = {
+    name: req.body.name,
+    login_id: req.body.login_id,
+    password: req.body.password,
+  };
+
+  // Generate a salt and hash the password
+  bcrypt.hash(admin.password, saltRounds, (err, hash) => {
+    if (err) throw err;
+    admin.password = hash;
+
+    let sql = "INSERT INTO admins SET ?";
+    let query = conn.query(sql, admin, (err, result) => {
+      if (err) throw err;
+      req.flash("success_msg", "Admin added successfully");
+      res.redirect("/admin");
+    });
+  });
+});
+
+// Delete Admin
+app.post("/admin/deleteAdmin", isAuthenticatedAdmin,(req, res) => {
+  let adminId = req.body.adminId;
+
+  let sql = "DELETE FROM admins WHERE id = ?";
+  let query = conn.query(sql, [adminId], (err, result) => {
+    if (err) throw err;
+    req.flash("success_msg", "Admin deleted successfully");
+    res.redirect("/admin");
+  });
+});
+
+
+
+//_______________________________________________VISITEE SECTION _____________________________________
 // Middleware to check if the visitiee is logged in
 const isAuthenticated = (req, res, next) => {
   if (req.session && req.session.visiteeId) {
     return next();
   } else {
-    res.redirect("/visitee/login");
+    res.redirect("/login");
   }
 };
 
-
-// Visitee View - Login Page
-app.get("/visitee/login", (req, res) => {
-  res.render("visitee_login");
-});
-
-
-// Visitee View - Authenticate and Redirect to Dashboard
-app.post("/visitee/authenticate", (req, res) => {
-  let loginId = req.body.login_id;
-  let password = req.body.password;
-
-  let sql = "SELECT * FROM visitees WHERE login_id = ? AND password = ?";
-  let query = conn.query(sql, [loginId, password], (err, result) => {
-    if (err) throw err;
-    if (result.length > 0) {
-      req.session.visiteeId = result[0].id; // Store visiteeId in session
-      res.redirect("/visitee/dashboard");
-    } else {
-      res.redirect("/visitee/login");
-    }
-  });
-});
- 
 // Visitee View - Dashboard
 app.get("/visitee/dashboard", isAuthenticated, (req, res) => {
   let visiteeId = req.session.visiteeId;
@@ -370,14 +456,26 @@ app.get("/epass/:visitorId/:token", function(req, res){
 });
 
 
+//TEMP ROUTE FOR PASSWORDS
+
+// app.get("/hashPassword/:password", (req, res) => {
+//   let password = req.params.password;
+
+//   bcrypt.hash(password, saltRounds, (err, hash) => {
+//     if (err) throw err;
+//     res.send(hash);
+//   });
+// });
+
 
 // Logout
 app.get("/logout", (req, res) => {
   req.session.destroy();
-  res.redirect("/visitee/login");
+  res.redirect("/login");
 });
 
 // Server listening
 app.listen(PORT, () => {
   console.log("Server is running at port 8000");
 });
+

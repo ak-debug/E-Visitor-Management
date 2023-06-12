@@ -316,7 +316,7 @@ app.get("/admin",  isAuthenticatedAdmin,(req, res) => {
 
 
 // Add Visitee
-app.post("/admin/addVisitee",isAuthenticatedAdmin, (req, res) => {
+app.post("/admin/addVisitee", isAuthenticatedAdmin, (req, res) => {
   let visitee = {
     name: req.body.name,
     email: req.body.email,
@@ -324,17 +324,28 @@ app.post("/admin/addVisitee",isAuthenticatedAdmin, (req, res) => {
     password: req.body.password,
   };
 
-  // Generate a salt and hash the password
-  bcrypt.hash(visitee.password, saltRounds, (err, hash) => {
+  // Check if a user with the same username already exists
+  let checkSql = "SELECT * FROM visitees WHERE login_id = ?";
+  let query = conn.query(checkSql, visitee.login_id, (err, result) => {
     if (err) throw err;
-    visitee.password = hash;
-
-    let sql = "INSERT INTO visitees SET ?";
-    let query = conn.query(sql, visitee, (err, result) => {
-      if (err) throw err;
-      req.flash("success_msg", "Visitee added successfully");
+    if (result.length > 0) {
+      // User already exists
+      req.flash("error_msg", "Username already exists");
       res.redirect("/admin");
-    });
+    } else {
+      // Generate a salt and hash the password
+      bcrypt.hash(visitee.password, saltRounds, (err, hash) => {
+        if (err) throw err;
+        visitee.password = hash;
+
+        let sql = "INSERT INTO visitees SET ?";
+        let query = conn.query(sql, visitee, (err, result) => {
+          if (err) throw err;
+          req.flash("success_msg", "Visitee added successfully");
+          res.redirect("/admin");
+        });
+      });
+    }
   });
 });
 
@@ -351,24 +362,35 @@ app.post("/admin/deleteVisitee",isAuthenticatedAdmin, (req, res) => {
 });
 
 
-app.post("/admin/addAdmin", isAuthenticatedAdmin,(req, res) => {
+app.post("/admin/addAdmin", isAuthenticatedAdmin, (req, res) => {
   let admin = {
     name: req.body.name,
     login_id: req.body.login_id,
     password: req.body.password,
   };
 
-  // Generate a salt and hash the password
-  bcrypt.hash(admin.password, saltRounds, (err, hash) => {
+  // Check if a user with the same username already exists
+  let checkSql = "SELECT * FROM admins WHERE login_id = ?";
+  let query = conn.query(checkSql, admin.login_id, (err, result) => {
     if (err) throw err;
-    admin.password = hash;
-
-    let sql = "INSERT INTO admins SET ?";
-    let query = conn.query(sql, admin, (err, result) => {
-      if (err) throw err;
-      req.flash("success_msg", "Admin added successfully");
+    if (result.length > 0) {
+      // User already exists
+      req.flash("error_msg", "Username already exists");
       res.redirect("/admin");
-    });
+    } else {
+      // Generate a salt and hash the password
+      bcrypt.hash(admin.password, saltRounds, (err, hash) => {
+        if (err) throw err;
+        admin.password = hash;
+
+        let sql = "INSERT INTO admins SET ?";
+        let query = conn.query(sql, admin, (err, result) => {
+          if (err) throw err;
+          req.flash("success_msg", "Admin added successfully");
+          res.redirect("/admin");
+        });
+      });
+    }
   });
 });
 
@@ -454,6 +476,25 @@ app.get("/epass/:visitorId/:token", function(req, res){
     }
   });
 });
+
+//Invalidate the QR
+app.get('/authenticateVisitor/:visitorId/:qrCode', (req, res) => {
+  let visitorId = req.params.visitorId;
+  let qrCode = req.params.qrCode;
+
+  // Assuming the QR code contains the visitor's id
+  if (visitorId === qrCode) {
+    // Invalidate the QR code (e.g., by setting the `token` field to null)
+    let sql = "UPDATE visitors SET token = NULL WHERE id = ?";
+    let query = conn.query(sql, [visitorId], (err, result) => {
+      if (err) throw err;
+      res.send('success');
+    });
+  } else {
+    res.send('invalid');
+  }
+});
+
 
 
 //TEMP ROUTE FOR PASSWORDS

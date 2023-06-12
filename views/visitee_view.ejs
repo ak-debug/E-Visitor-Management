@@ -24,6 +24,7 @@
               <th>Name</th>
               <th>Email</th>
               <th>Meeting Time</th>
+              <th>Action</th>
             </tr>
           </thead>
           <tbody>
@@ -33,6 +34,13 @@
               <td><%= visitor.name %></td>
               <td><%= visitor.email_id %></td>
               <td><%= visitor.meeting_time || "Not Scheduled" %></td>
+              <td>
+                <% if (visitor.meeting_time && visitor.token) { %>
+                  <button class="btn btn-primary scan-btn" onclick="scanQRCode(<%= visitor.id %>, this)">Scan</button>
+                  <span class="success-icon" style="display: none;">&#10004;</span>
+                <% } %>
+              </td>
+              
             </tr>
             <% }); %>
           </tbody>
@@ -65,6 +73,8 @@
   <script src="/assets/js/jquery-3.3.1.js"></script>
   <script src="/assets/js/bootstrap.js"></script>
   <script src="/assets/js/bootstrap-datetimepicker.js"></script>
+  <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+
   <script>
     $(document).ready(function () {
       $('.form_datetime').datetimepicker({
@@ -77,7 +87,38 @@
         showMeridian: 1
       });
     });
+  
+    function scanQRCode(visitorId, buttonElement) {
+      const html5QrCode = new Html5QrcodeScanner(
+        "reader",
+        { fps: 10, qrbox: {width: 250, height: 250} }
+      );
+
+      html5QrCode.render((decodedText, decodedResult) => {
+        $.ajax({
+          url: '/authenticateVisitor/' + visitorId + '/' + decodedText,
+          type: 'GET',
+          success: function (response) {
+            if (response === 'success') {
+              $(buttonElement).hide();
+              $(buttonElement).next('.success-icon').show();
+              html5QrCode.clear();  // Stop the scanner
+
+            } else if (response === 'invalid') {
+              alert('Invalid QR code');
+            }
+          },
+          error: function () {
+            alert('Error occurred while scanning QR code');
+          }
+        });
+      });
+    }
+    
   </script>
+  
+  <div id="reader" style="width: 300px; height: 300px;"></div>
+
 </body>
 
 </html>

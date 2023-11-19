@@ -1,5 +1,5 @@
+<!DOCTYPE html>
 <html lang="en">
-
 <head>
   <meta charset="utf-8">
   <title>Visitor Management</title>
@@ -9,13 +9,15 @@
 
 <body>
   <div class="container">
-
-    <h1 id="one">Thapar Institue of Engineering & Technology</h1>
-    <h3 id="two"><b><i>E-Visitor Management</i></b></h3>
+    <h1>Thapar Institute of Engineering & Technology</h1>
+    <h3><b><i>E-Visitor Management</i></b></h3>
+    
 
     <button class="btn btn-success" data-toggle="modal" data-target="#myModalAdd">Add New</button>
+    <button class="btn btn-primary" onclick="scanQRCode()">Scan QR</button>
     <hr />
 
+    <!-- Visitors Table -->
     <table class="table table-striped" id="mytable">
       <thead>
         <tr>
@@ -25,7 +27,8 @@
           <th>Mobile Number</th>
           <th>Checked In</th>
           <th>Checked Out</th>
-          <th>Visitee</th> <!-- Added visitee column -->
+          <th>Visitee</th>
+         
           <th>Action</th>
         </tr>
       </thead>
@@ -39,6 +42,7 @@
           <td><%= visitor.checkin %></td>
           <td><%= visitor.checkout %></td>
           <td>
+            <!-- Visitee Dropdown -->
             <select class="form-control visitee-dropdown" data-visitor-id="<%= visitor.id %>">
               <option value="" selected disabled>Select Visitee</option>
               <% visitees.forEach(function(visitee) { %>
@@ -46,7 +50,9 @@
               <% }); %>
             </select>
           </td>
+         
           <td>
+            <!-- Edit/Delete buttons -->
             <a href="javascript:void(0);" class="btn btn-sm btn-info edit" data-id="<%= visitor.id %>"
               data-name="<%= visitor.name %>" data-email_id="<%= visitor.email_id %>"
               data-mobile_no="<%= visitor.mobile_no %>" data-checkin="<%= visitor.checkin %>"
@@ -57,10 +63,14 @@
         <% }); %>
       </tbody>
     </table>
-  </div>
 
-  <!-- Add New Product Modal-->
-  <form action="/save" method="post">
+    <!--This is where popup of scanner will appear this is inportant  -->
+    
+    <div id="reader" style="width: 300px; height: 300px;"></div>
+    
+  </div>
+   <!-- Add New Product Modal-->
+   <form action="/save" method="post">
     <div class="modal fade" id="myModalAdd" tabindex="-1" role="dialog" aria-labelledby="exampleModalLabel"
       aria-hidden="true">
       <div class="modal-dialog" role="document">
@@ -85,7 +95,7 @@
               <input type="text" name="mobile_no" class="form-control" placeholder="Mobile Number" required>
             </div>
             <div class="form-group">
-              <input type="text" name="checkin" class="form-control form_datetime1" placeholder="Check In" required>
+              <input type="text" name="checkin" class="form-control form_datetime1" placeholder="Check In">
             </div>
             <div class="form-group">
               <select class="form-control" name="visitee_id" required>
@@ -158,10 +168,13 @@ modal" aria-label="Close"><span
       </div>
     </div>
   </form>
+  <!-- Additional modals and scripts for Add/Edit/Delete -->
 
   <script src="/assets/js/jquery-3.3.1.js"></script>
   <script src="/assets/js/bootstrap.js"></script>
   <script src="/assets/js/bootstrap-datetimepicker.js"></script>
+  <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+
   <script>
     $(document).ready(function () {
       // Showing data to modal for edit record
@@ -218,7 +231,45 @@ modal" aria-label="Close"><span
         });
       });
     });
-</script>
+    function scanQRCode(visitorId, buttonElement) {
+      const html5QrCode = new Html5QrcodeScanner(
+        "reader",
+        { fps: 10, qrbox: { width: 250, height: 250 } }
+      );
+  
+      html5QrCode.render((decodedText, decodedResult) => {
+         // Assuming the QR code contains the visitor's id
+        let visitorId = decodedText; // or extract visitorId from decodedText if it contains more data
+        // Update the URL to match the new backend route
+        $.ajax({
+          url: '/visitor/scanQR/' + visitorId + '/' + decodedText,
+          type: 'GET',
+          success: function (response) {
+            if (response === 'checked_in') {
+              alert('Visitor has been checked in successfully.');
+              html5QrCode.clear();  // Stop the scanner
+            } else if (response === 'checked_out') {
+              // Handling for successful checkout
+              alert('Visitor has been checked out successfully.');
+              html5QrCode.clear();  // Stop the scanner
+            } else if (response === 'already_checked_out') {
+              alert('Visitor has already checked out.');
+            } else if (response === 'invalid_qr') {
+              alert('Invalid QR code.');
+            } else if (response === 'invalid_visitor') {
+              alert('No visitor found with this QR code.');
+            } else {
+              alert('Error occurred while scanning QR code');
+            }
+          },
+          error: function () {
+            alert('Error occurred while scanning QR code');
+          }
+        });
+      });
+    }
+  </script>
+  
 </body>
 
 </html>
